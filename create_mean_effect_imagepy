@@ -1,0 +1,62 @@
+import nibabel as nib
+import numpy as np
+import os
+import matplotlib.pyplot as plt
+
+# Dictionnaire des améliorations cliniques pour chaque patient
+clinical_improvement = {
+    'DERc': 60, 'SILf': 80, 'COCj': 94, 'HEMg': 14, 'SAMm': 95,
+    'PASj': 97, 'FRAr': 96, 'BOUl': 80, 'LEBm': 11, 'RAFc': 31,
+    'GATd': 95, 'JAKv': 0, 'VALa': 88, 'DAUd': 81, 'LAMp': 26,
+    'FORa': 76, 'ILAf': 0, 'ERIi': 50, 'BOId': 33
+}
+
+def create_mean_effect_image(gaussian_vats_folder, output_path):
+    weighted_sum_effect = None
+    total_weights = None
+
+    for filename in os.listdir(gaussian_vats_folder):
+        if not filename.endswith('.nii'): continue
+        patient_id = filename.split('_')[0]
+        if patient_id not in clinical_improvement: continue
+
+        img_path = os.path.join(gaussian_vats_folder, filename)
+        img = nib.load(img_path)
+        data = img.get_fdata()
+
+        weighted_effect = data * clinical_improvement[patient_id]
+
+        if weighted_sum_effect is None:
+            weighted_sum_effect = weighted_effect
+            total_weights = data
+        else:
+            weighted_sum_effect += weighted_effect
+            total_weights += data
+
+    # Éviter la division par zéro en ajoutant une petite constante à total_weights
+    total_weights[total_weights == 0] = np.finfo(float).eps
+    # Seuil de poids minimal pour considérer un voxel comme ayant une contribution significative
+    weight_threshold = 0.05  # À ajuster selon vos besoins
+
+
+    mean_effect_image = weighted_sum_effect / total_weights
+    mean_effect_image = np.nan_to_num(mean_effect_image)
+
+    mean_effect_image[total_weights < weight_threshold] = 0
+    
+    output_img = nib.Nifti1Image(mean_effect_image, img.affine, img.header)
+    nib.save(output_img, output_path)
+
+    print(f"Image de l'effet moyen pondéré créée : {output_path}")
+
+# Chemins d'entrée et de sortie pour LH et RH
+input_folder_lh = '/Users/nicolas.tempier/Desktop/These/Gaetan/Methode_eisenstein/create_gaussian_from_FATs/gaussianized_resampled_LH'
+input_folder_rh = '/Users/nicolas.tempier/Desktop/These/Gaetan/Methode_eisenstein/create_gaussian_from_FATs/gaussianized_resampled_RH'
+output_path_lh = '/Users/nicolas.tempier/Desktop/These/Gaetan/Methode_eisenstein/Mean_effect_image/mean_effect_image_LH.nii'
+output_path_rh = '/Users/nicolas.tempier/Desktop/These/Gaetan/Methode_eisenstein/Mean_effect_image/mean_effect_image_RH.nii'
+
+# Créer les images d'effet moyen pondéré pour LH et RH
+create_mean_effect_image(input_folder_lh, output_path_lh)
+create_mean_effect_image(input_folder_rh, output_path_rh)
+
+
